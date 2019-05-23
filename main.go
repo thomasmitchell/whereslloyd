@@ -16,8 +16,14 @@ const infoURL = "https://whereslloyd.com/wp-content/themes/whereslloyd/dist/scri
 
 type calendarResp struct {
 	Items []struct {
-		Location string `json:"location"`
-		Start    struct {
+		Status      string `json:"status"`
+		Summary     string `json:"summary"`
+		Location    string `json:"location"`
+		Description string `json:"description"`
+		Organizer   struct {
+			DisplayName string `json:"displayName"`
+		} `json:"organizer"`
+		Start struct {
 			DateTime string `json:"dateTime"`
 		} `json:"start"`
 	} `json:"items"`
@@ -69,7 +75,13 @@ func main() {
 
 	dateStr := time.Now().Format("2006-01-02")
 
-	data := map[string][]string{}
+	type displayOutput struct {
+		Summary     string
+		Location    string
+		Description string
+		Truck       string
+	}
+	data := map[string][]displayOutput{}
 
 	for _, path := range calendarPaths {
 		url := fmt.Sprintf("%s%s/events?singleEvents=false&timeMin=%[3]sT00:00:00.000Z&timeMax=%[3]sT23:59:59.999Z&key=%[4]s",
@@ -109,14 +121,25 @@ func main() {
 			panic(err.Error())
 		}
 
+		//fmt.Println(string(respContent))
+
 		for _, item := range respStruct.Items {
+			if item.Status == "cancelled" {
+				continue
+			}
+
 			readableTime, err := time.Parse("2006-01-02T15:04:05-07:00", item.Start.DateTime)
 			if err != nil {
 				panic(err.Error())
 			}
 
 			k := readableTime.In(time.Local).Format(time.Kitchen)
-			data[k] = append(data[k], item.Location)
+			data[k] = append(data[k], displayOutput{
+				Summary:     item.Summary,
+				Location:    item.Location,
+				Description: item.Description,
+				Truck:       strings.TrimSuffix(item.Organizer.DisplayName, " Truck Schedule"),
+			})
 		}
 	}
 
@@ -141,8 +164,22 @@ func main() {
 
 	for _, t := range timeOrder {
 		ansi.Printf("@G{%s}\n", t)
-		for _, location := range data[t] {
-			ansi.Printf("\t@B{%s}\n", location)
+		for _, outputData := range data[t] {
+			ansi.Printf("\t@B{%s}\n", outputData.Summary)
+
+			if outputData.Location != "" {
+				ansi.Printf("\t@W{%s}\n", outputData.Location)
+			}
+
+			if outputData.Description != "" {
+				ansi.Printf("\t@w{(%s)}\n", outputData.Description)
+			}
+
+			if outputData.Truck != "" {
+				ansi.Printf("\t@m{%s}\n", outputData.Truck)
+			}
+
+			ansi.Printf("\n")
 		}
 	}
 }
